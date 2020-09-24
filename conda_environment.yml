@@ -1,0 +1,18 @@
+name: ml-server
+channels:
+  - conda-forge
+  - fastai
+  - pytorch
+dependencies:
+  - python=3.7.3
+  - ipython=7.5.0
+  - flask
+  - waitress
+  - jsonpickle
+  - numpy
+  - tqdm
+  - opencv
+  # optional
+  - pytorch-cpu
+  - torchvision-cpu
+  - fastai
