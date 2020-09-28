@@ -27,8 +27,8 @@ class TesseractConcat(BenchmarkInterface):
         return [s for s in img2string(np.concatenate(images, axis=1), api=self._char_api)]
     
     def numbers2strings(self, images):
-        images = [imutils.resize(im, width=350) for im in images]
-        return img2string(np.concatenate(images, axis=0), api=self._line_api).split('\n')
+        images = [imutils.resize(im, height=110) for im in images]
+        return img2string(np.concatenate(images, axis=1), api=self._line_api) # needs to split more
 
 class TesseractLegacyConcat(TesseractConcat):
     lstm = False
