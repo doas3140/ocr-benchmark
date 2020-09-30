@@ -13,8 +13,12 @@ from src.tesseract_concat import TesseractLegacyConcat, TesseractLSTMConcat
 from src.tesseract_multicore import TesseractLegacyMultiCore, TesseractLSTMMultiCore
 import inspect
 from sklearn.metrics import accuracy_score, precision_score, recall_score
+from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from time import time
+from PIL import Image
+import imageio
+# import pyvips
 import ray
 ray.init()
 
@@ -105,16 +109,50 @@ def obj2dict(obj):
             pr[name] = value
     return pr
 
-print_3visaconcat_benchmark_multicore_with_10_tesseracts()
-print_3visaconcat_benchmark_multicore()
+def pyvips_read(path):
+    im = pyvips.Image.new_from_file(path, access='sequential')
+    im = im.colourspace('srgb')
+    mem_img = im.write_to_memory()
+    return np.frombuffer(mem_img, dtype=np.uint8).reshape(im.height, im.width, 3)
+
+def test_sample_dataloader(batch_size=4, num_workers=4):
+    total, test = 10000, 500
+    class ImageDataset(Dataset):
+        def __len__(self):
+            return test
+        def __getitem__(self, idx):
+            return cv2.imread('./data/0.png')
+    t0 = time()
+    dataset = ImageDataset()
+    dl = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    for batch in dl:
+        np.array(batch)
+    return (time() - t0)/test*total/60
+
+def read_benchmark():
+    benchmark_name = 'READ IMAGES (in minutes)'
+    print('\n################## START {} #########################'.format(benchmark_name))
+    print('OPEN CV:\t', t(lambda: cv2.imread('./data/0.png'), times=100)*10000/60)
+    print('PILLOW: \t', t(lambda: np.array(Image.open('./data/0.png')), times=100)*10000/60)
+    print('IMAGEIO:\t', t(lambda: imageio.imread('./data/0.png'), times=100)*10000/60)
+    for bs in [8]:
+        for num_workers in [1,4,8,12]:
+            print(f'PYTORCH (BS={bs} WORKERS={num_workers}):', test_sample_dataloader(bs, num_workers))
+    # print(f'TOTAL TIME: {np.sum(times)}')
+    print('################## END {} #########################'.format(benchmark_name))
+
+read_benchmark()
+
+# print_3visaconcat_benchmark_multicore_with_10_tesseracts()
+# print_3visaconcat_benchmark_multicore()
 print_3visaconcat_benchmark()
 
 # print_speed_benchmark_3k_multicore(**obj2dict(TesseractLSTMNaive()))
 # print_speed_benchmark_3k(**obj2dict(BenchmarkInterface()))
-# print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))
-# print_speed_benchmark_3k(**obj2dict(TesseractLSTMSingle()))
+print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))
+print_speed_benchmark_3k(**obj2dict(TesseractLSTMSingle()))
 # print_speed_benchmark_3k_single(**obj2dict(TesseractLSTMMultiCore()))
-# print_speed_benchmark_3k(**obj2dict(TesseractLegacyConcat()))
-# print_speed_benchmark_3k(**obj2dict(TesseractLSTMConcat()))
+print_speed_benchmark_3k(**obj2dict(TesseractLegacyConcat()))
+print_speed_benchmark_3k(**obj2dict(TesseractLSTMConcat()))
 
 # print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))

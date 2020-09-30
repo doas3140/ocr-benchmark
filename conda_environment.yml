@@ -14,9 +14,10 @@ dependencies:
   - tqdm
   - opencv
   - tqdm
+  - pyvips
   # optional
-  # - pytorch-cpu
-  # - torchvision-cpu
+  - pytorch-cpu
+  - torchvision-cpu
   # - fastai
   # pip
   - pip
@@ -26,3 +27,4 @@ dependencies:
     - tesserocr
     - ray
     - pytesseract
+    - imageio
