@@ -9,13 +9,12 @@ from src.thresholds import threshold
 from src.tesseract_single import TesseractLegacySingle, TesseractLSTMSingle
 from src.tesseract_concat import TesseractLegacyConcat, TesseractLSTMConcat
 from src.tesseract_multicore import TesseractLegacyMultiCore, TesseractLSTMMultiCore
-from src.tesseract_naive import TesseractLegacyNaive, TesseractLSTMNaive
 import inspect
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from tqdm import tqdm
 from time import time
-import ray
-ray.init()
+# import ray
+# ray.init()
 
 import os
 os.environ['OMP_THREAD_LIMIT'] = '8'

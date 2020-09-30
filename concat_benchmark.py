@@ -11,11 +11,12 @@ from tqdm import tqdm
 from time import time
 from tesserocr import PyTessBaseAPI, PSM, OEM
 import tesserocr
+from PIL import Image
 
 
 def print_3visaconcat_benchmark():
     benchmark_name = 'ALL CONCAT (in minutes)'
-    print('\n################## START {} ({}) #########################'.format(benchmark_name))
+    print('\n################## START {} #########################'.format(benchmark_name))
     bboxes = np.array([
         [ 945,   70,  400,   75],
         [ 250, 1110,  350,  100],
@@ -33,12 +34,13 @@ def print_3visaconcat_benchmark():
     concat_h = np.sum(bboxes,axis=0)[3]
     concat_w = np.max(bboxes,axis=0)[2]
     
+    visa = cv2.imread('./data/0.png')
+
     def predict_one_image():
         with PyTessBaseAPI(psm=PSM.SINGLE_BLOCK, oem=OEM.LSTM_ONLY, lang='eng') as api:
             api.SetVariable("tessedit_char_whitelist", "0123456789")
             api.SetVariable("tessedit_do_invert", "0")
             concat_i = np.empty((concat_h,concat_w,3), np.uint8)
-            visa = cv2.imread('./data/0.png')
             y = 0
             concat_i.fill(255)
             for bb in bboxes:
@@ -50,6 +52,6 @@ def print_3visaconcat_benchmark():
             api.SetImage(concat_g_img)
             _ = api.GetUTF8Text()
     t0 = time()
-    for _ in range(100): predict_one_image()
-    print(f'TOTAL TIME: {(time()-t0)*100}')
-    print('################## END {} ({}) #########################'.format(benchmark_name, kwargs['name']))
+    for _ in range(10): predict_one_image()
+    print(f'TOTAL TIME: {(time()-t0)*1000/60} min')
+    print('################## END {} #########################'.format(benchmark_name))
