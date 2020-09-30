@@ -3,7 +3,9 @@ import numpy as np
 import cv2
 from pathlib import Path
 import random
-from concat_benchmark import print_3visaconcat_benchmark
+from concat_benchmark import print_3visaconcat_benchmark, \
+                             print_3visaconcat_benchmark_multicore, \
+                             print_3visaconcat_benchmark_multicore_with_10_tesseracts
 from src.benchmark import BenchmarkInterface
 from src.thresholds import threshold
 from src.tesseract_single import TesseractLegacySingle, TesseractLSTMSingle
@@ -13,8 +15,8 @@ import inspect
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from tqdm import tqdm
 from time import time
-# import ray
-# ray.init()
+import ray
+ray.init()
 
 import os
 os.environ['OMP_THREAD_LIMIT'] = '8'
@@ -103,6 +105,8 @@ def obj2dict(obj):
             pr[name] = value
     return pr
 
+print_3visaconcat_benchmark_multicore_with_10_tesseracts()
+print_3visaconcat_benchmark_multicore()
 print_3visaconcat_benchmark()
 
 # print_speed_benchmark_3k_multicore(**obj2dict(TesseractLSTMNaive()))
