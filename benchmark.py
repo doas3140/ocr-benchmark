@@ -11,6 +11,7 @@ from src.thresholds import threshold
 from src.tesseract_single import TesseractLegacySingle, TesseractLSTMSingle
 from src.tesseract_concat import TesseractLegacyConcat, TesseractLSTMConcat
 from src.tesseract_multicore import TesseractLegacyMultiCore, TesseractLSTMMultiCore
+from src.pytesseract_single import PytesseractSingle
 import inspect
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 from torch.utils.data import Dataset, DataLoader
@@ -129,7 +130,7 @@ def test_sample_dataloader(batch_size=4, num_workers=4):
         np.array(batch)
     return (time() - t0)/test*total/60
 
-def read_benchmark():
+def print_read_benchmark():
     benchmark_name = 'READ IMAGES (in minutes)'
     print('\n################## START {} #########################'.format(benchmark_name))
     print('OPEN CV:\t', t(lambda: cv2.imread('./data/0.png'), times=100)*10000/60)
@@ -141,12 +142,14 @@ def read_benchmark():
     # print(f'TOTAL TIME: {np.sum(times)}')
     print('################## END {} #########################'.format(benchmark_name))
 
-read_benchmark()
+
+print_read_benchmark()
 
 # print_3visaconcat_benchmark_multicore_with_10_tesseracts()
 # print_3visaconcat_benchmark_multicore()
 print_3visaconcat_benchmark()
 
+# print_speed_benchmark_3k(**obj2dict(PytesseractSingle()))
 # print_speed_benchmark_3k_multicore(**obj2dict(TesseractLSTMNaive()))
 # print_speed_benchmark_3k(**obj2dict(BenchmarkInterface()))
 print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))
