@@ -1,10 +1,15 @@
-version: '3'
+version: '3.5'
 services:
   web:
-    build: .
+    build:
+      context: .
+      shm_size: '2gb' # <-- this will set the size when BUILDING
+    shm_size: '2gb' # <-- when RUNNING 
+    security_opt:
+      - seccomp:unconfined
     ports:
       - "5000:5000"
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    # volumes:
-    #   - "/c/Users/domin/Documents/GitHub/ocr-benchmark:/code:rw"
+    volumes:
+      - "/c/Users/domin/Documents/GitHub/ocr-benchmark:/code:rw"

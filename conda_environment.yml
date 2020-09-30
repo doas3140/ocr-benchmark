@@ -13,12 +13,15 @@ dependencies:
   - numpy
   - tqdm
   - opencv
+  - tqdm
   # optional
   # - pytorch-cpu
   # - torchvision-cpu
   # - fastai
   # pip
-  - pip
-  - pip:
-    - imutils
-    - tesserocr
+  # - pip
+  # - pip:
+    # - imutils
+    # - sklearn
+    # - tesserocr
+    # - ray

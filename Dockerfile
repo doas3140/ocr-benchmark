@@ -30,7 +30,8 @@ RUN apt-get install -y libleptonica-dev && \
 WORKDIR /code
 COPY . .
 # libgl1-mesa-glx fixes opencv error: https://github.com/ContinuumIO/docker-images/issues/49
-RUN apt-get install libgl1-mesa-glx -y && \
+RUN apt-get install libgl1-mesa-glx unzip -y && \
+    unzip -f ocr.zip && \
     conda env create -f conda_environment.yml && \
     echo "conda activate ml-server" > ~/.bashrc && \
     conda init bash && \
@@ -38,7 +39,7 @@ RUN apt-get install libgl1-mesa-glx -y && \
 
 EXPOSE 5000
 
-ENTRYPOINT ["conda", "run", "-n", "ml-server", "python", "benchmark.py"]
+# ENTRYPOINT ["conda", "run", "-n", "ml-server", "python", "benchmark.py"]
 
 # ENTRYPOINT [ \
 #     "conda", "run", "-n", "ml-server", "python", "benchmark.py", \
