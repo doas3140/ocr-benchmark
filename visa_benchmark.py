@@ -222,11 +222,25 @@ br_crops = list(filter(lambda x: x[0] == 'br', all_crops))
 tr_crops = list(filter(lambda x: x[0] == 'tr', all_crops))
 ve_crops = list(filter(lambda x: x[0] == 've', all_crops))
 
+def batch_list(arr, num_batches):
+    out = []
+    b = []
+    for i in arr:
+        if len(b) == num_batches:
+            out.append(b)
+            b = []
+        b.append(i)
+    if len(b) > 0: out.append(b)
+    return out
+
+
 for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
     images = list(map(lambda x: x[1], crops))
-    big_image = np.concatenate(images, axis=0)
-    with TIMER.time(f'pred-{name}'):
-        y_preds = ocr.predict(big_image)
+    y_preds = []
+    for image_batch in batch_list(images, 64):
+        big_image = np.concatenate(image_batch, axis=0)
+        with TIMER.time(f'pred-{name}'):
+            y_preds.extend(ocr.predict(big_image))
     y_trues = list(map(lambda x: x[2], crops))
     try:
         print(f'{name} accuracy: {np.mean(np.array(y_preds) == np.array(y_trues))}')
