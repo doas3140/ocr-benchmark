@@ -192,12 +192,13 @@ class ImageDataset(Dataset):
                     crop = np.concatenate(digits, axis=1)
                 crop = imutils.resize(crop, width=500)
                 crops.append((name, crop, nr))
+        assert len(crops) == 12
         return crops
 
 bl_ocr, br_ocr, tr_ocr, ve_ocr = BL_OCR(), BR_OCR(), TR_OCR(lstm=True), VE_OCR()
 
 dataset = ImageDataset('./visa/')
-dl = DataLoader(dataset, batch_size=8, shuffle=False, num_workers=os.cpu_count(), collate_fn=lambda x:x[0])
+dl = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=os.cpu_count(), collate_fn=lambda x:x[0], drop_last=False)
 
 t_start = time.time()
 i = 0
@@ -208,14 +209,7 @@ with TIMER.time(f'imread'):
         i += 1
         # if i >20: break
         all_crops.extend(crops)
-print()
-
-def name2ocr(name):
-    if name == 'bl': return bl_ocr
-    if name == 'br': return br_ocr
-    if name == 'tr': return tr_ocr
-    if name == 've': return ve_ocr
-    assert False
+print('NUM CROPS:',len(all_crops))
 
 bl_crops = list(filter(lambda x: x[0] == 'bl', all_crops))
 br_crops = list(filter(lambda x: x[0] == 'br', all_crops))
@@ -233,14 +227,24 @@ def batch_list(arr, num_batches):
     if len(b) > 0: out.append(b)
     return out
 
-
-for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
-    images = list(map(lambda x: x[1], crops))
+def predict_in_batch(ocr, images, name=''):
     y_preds = []
     for image_batch in batch_list(images, 64):
         big_image = np.concatenate(image_batch, axis=0)
         with TIMER.time(f'pred-{name}'):
             y_preds.extend(ocr.predict(big_image))
+    return y_preds
+
+def predict_in_solo(ocr, images, name=''):
+    y_preds = []
+    for image in images:
+        with TIMER.time(f'pred-{name}'):
+            y_preds.extend(ocr.predict(image))
+    return y_preds
+
+for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
+    images = list(map(lambda x: x[1], crops))
+    y_preds = predict_in_batch(ocr, images, name)
     y_trues = list(map(lambda x: x[2], crops))
     try:
         print(f'{name} accuracy: {np.mean(np.array(y_preds) == np.array(y_trues))}')
