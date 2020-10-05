@@ -16,6 +16,7 @@ dependencies:
   - tqdm
   - pyvips
   # optional
+  - pandas
   - pytorch-cpu
   - torchvision-cpu
   # - fastai
@@ -28,3 +29,4 @@ dependencies:
     - ray
     - pytesseract
     - imageio
+    - tabulate

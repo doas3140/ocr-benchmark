@@ -14,11 +14,11 @@ from src.tesseract_multicore import TesseractLegacyMultiCore, TesseractLSTMMulti
 from src.pytesseract_single import PytesseractSingle
 import inspect
 from sklearn.metrics import accuracy_score, precision_score, recall_score
-from torch.utils.data import Dataset, DataLoader
+# from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from time import time
 from PIL import Image
-import imageio
+# import imageio
 # import pyvips
 import ray
 ray.init()
@@ -143,19 +143,21 @@ def print_read_benchmark():
     print('################## END {} #########################'.format(benchmark_name))
 
 
-print_read_benchmark()
+# print_read_benchmark()
 
 # print_3visaconcat_benchmark_multicore_with_10_tesseracts()
 # print_3visaconcat_benchmark_multicore()
-print_3visaconcat_benchmark()
+# print_3visaconcat_benchmark()
+
+print_acc_benchmark(**obj2dict(TesseractLegacySingle()))
 
 # print_speed_benchmark_3k(**obj2dict(PytesseractSingle()))
 # print_speed_benchmark_3k_multicore(**obj2dict(TesseractLSTMNaive()))
 # print_speed_benchmark_3k(**obj2dict(BenchmarkInterface()))
-print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))
-print_speed_benchmark_3k(**obj2dict(TesseractLSTMSingle()))
+# print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))
+# print_speed_benchmark_3k(**obj2dict(TesseractLSTMSingle()))
 # print_speed_benchmark_3k_single(**obj2dict(TesseractLSTMMultiCore()))
-print_speed_benchmark_3k(**obj2dict(TesseractLegacyConcat()))
-print_speed_benchmark_3k(**obj2dict(TesseractLSTMConcat()))
+# print_speed_benchmark_3k(**obj2dict(TesseractLegacyConcat()))
+# print_speed_benchmark_3k(**obj2dict(TesseractLSTMConcat()))
 
 # print_speed_benchmark_3k(**obj2dict(TesseractLegacySingle()))
