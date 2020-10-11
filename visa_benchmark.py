@@ -20,6 +20,7 @@ from tesserocr import PyTessBaseAPI, PSM, OEM
 import tesserocr
 import imutils
 from tabulate import tabulate
+import matplotlib.pyplot as plt
 
 class Timer:
     def __init__(self):
@@ -54,14 +55,27 @@ def init_api(**kwargs):
     api.SetVariable("tessedit_do_invert", "0")
     return api
 
+def filter53(y_pred):
+    prev_s = ''
+    for i,s in enumerate(y_pred):
+        if s == '3' and prev_s == '5':
+            y_pred = y_pred[:i-1] + y_pred[i:]
+            break
+        prev_s = s
+    return y_pred
+
 class OCR:
     def __init__(self, vert=False, lstm=False, lang='eng', **kwargs):
+        self.lstm = lstm
         self.api = init_api(psm=PSM.SINGLE_BLOCK_VERT_TEXT if vert else PSM.SINGLE_BLOCK, oem=OEM.LSTM_ONLY if lstm else OEM.TESSERACT_ONLY, lang=lang)
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     def _preprocessing(self, image):
         return image
     def _postprocess(self, y_pred):
-        return y_pred.strip().replace(' ', '')
+        y_pred = y_pred.strip().replace(' ', '')
+        if self.lstm and len(y_pred) == 10:
+            y_pred = filter53(y_pred)
+        return y_pred
     def predict(self, image):
         thresh = self._preprocessing(image)
         self.api.SetImage(PIL.Image.fromarray(thresh))
@@ -77,12 +91,12 @@ class OCRBatch(OCR):
 class BR_OCR(OCRBatch):
     def _preprocessing(self, bgr):
         gray = togray(bgr, rgb=(.1,.8,.1))
-        return threshold(gray, 70, cv2.THRESH_BINARY)
+        return threshold(gray, 60, cv2.THRESH_BINARY)
 
 class BL_OCR(OCRBatch):
     def _preprocessing(self, bgr):
         gray = togray(bgr, rgb=(.1,.8,.1))
-        return threshold(gray, 120, cv2.THRESH_BINARY)
+        return threshold(gray, 100, cv2.THRESH_BINARY)
 
 class TR_OCR(OCRBatch):
     def _preprocessing(self, bgr):
@@ -91,20 +105,26 @@ class TR_OCR(OCRBatch):
         return threshold(gray, 80, cv2.THRESH_BINARY)
     def _postprocess(self, y_pred):
         y_pred = y_pred.strip()
-        for x_str, y_str in [(' ', ''),('!','1')]:
+        for x_str, y_str in [(' ', ''),('!','1'),('|','1'),('I','1')]:
             y_pred = y_pred.replace(x_str, y_str)
+        if self.lstm and len(y_pred) == 10:
+            y_pred = filter53(y_pred)
         return y_pred
 
 class VE_OCR(OCRBatch):
     def _preprocessing(self, bgr):
-        bgr = togray(bgr, (0,1,0))
-        bgr = cv2.medianBlur(bgr, 5)
-        return threshold(bgr, 80, cv2.THRESH_BINARY)
+        gray = togray(bgr, (0,1,0))
+        gray = cv2.medianBlur(gray, 5)
+        thresh = threshold(gray, 100, cv2.THRESH_BINARY)
+        cnts = find_all_contours(255-thresh)
+        cnts = list(filter(lambda c: contour_area(c) < 50, cnts))
+        thresh = cv2.drawContours(thresh, cnts, -1, 255, -1)
+        return thresh
     def _postprocess(self, y_pred):
         y_pred = y_pred.strip()
         for s in [' ','\n',"'",'"','.','‘','-','«','(',')','’']:
             y_pred = y_pred.replace(s,'')
-        for x_str, y_str in [('?', '7'), ('&', '8'), ('€', '6')]:
+        for x_str, y_str in [('/', '7'), ('?', '7'), ('&', '8'), ('€', '6')]:
             y_pred = y_pred.replace(x_str, y_str)
         return y_pred
 
@@ -121,10 +141,10 @@ def find_digits(bgr, pad=4, clahe=cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8
     bgr = bgr_orig.copy()
     bgr[bgr[:,:,1] > 100] = 0 # filter yellow
     bgr[bgr[:,:,2] < 80] = 0 # filter black
-    bgr = togray(bgr, [int(x)/10 for x in str(901)])
+    bgr = togray(bgr, (.8,.1,.1))
     bgr = clahe.apply(bgr)
     # bgr = cv2.medianBlur(bgr, 5)
-    bgr = threshold(bgr, 75, cv2.THRESH_BINARY)
+    bgr = threshold(bgr, 60, cv2.THRESH_BINARY)
     # bgr = morph(bgr, cv2.MORPH_OPEN, (2,2))
     contours = find_all_contours(bgr)
     contours = list(filter(lambda c: contour_area(c) > 45, contours))
@@ -189,6 +209,8 @@ class ImageDataset(Dataset):
                 cv2.normalize(crop, crop, 0, 255, cv2.NORM_MINMAX)
                 if name == 've':
                     digits = [imutils.resize(im, height=36) for im in find_digits(crop)]
+                    if len(digits) != 9:
+                        print(len(digits))
                     crop = np.concatenate(digits, axis=1)
                 crop = imutils.resize(crop, width=500)
                 crops.append((name, crop, nr))
@@ -207,7 +229,7 @@ print('READING IMAGES...')
 with TIMER.time(f'imread'):
     for crops in tqdm(dl):
         i += 1
-        # if i >20: break
+        if i >20: break
         all_crops.extend(crops)
 print('NUM CROPS:',len(all_crops))
 
@@ -229,7 +251,7 @@ def batch_list(arr, num_batches):
 
 def predict_in_batch(ocr, images, name=''):
     y_preds = []
-    for image_batch in batch_list(images, 64):
+    for image_batch in tqdm(batch_list(images, 3*40)):
         big_image = np.concatenate(image_batch, axis=0)
         with TIMER.time(f'pred-{name}'):
             y_preds.extend(ocr.predict(big_image))
@@ -237,15 +259,25 @@ def predict_in_batch(ocr, images, name=''):
 
 def predict_in_solo(ocr, images, name=''):
     y_preds = []
-    for image in images:
+    for image in tqdm(images):
         with TIMER.time(f'pred-{name}'):
             y_preds.extend(ocr.predict(image))
     return y_preds
 
+PRINT_BAD = True
+
 for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
+    if name not in ['ve']: continue
     images = list(map(lambda x: x[1], crops))
     y_preds = predict_in_batch(ocr, images, name)
     y_trues = list(map(lambda x: x[2], crops))
+    if PRINT_BAD:
+        # bads = [x for x in zip(images, y_preds, y_trues) if x[1] != x[2]]
+        # fig = plt.figure()
+        for i, (im,yp,yt) in enumerate(zip(images, y_preds, y_trues)):
+            if yp != yt:
+                cv2.imwrite(f'bads/{yp}_{yt}_{name}.png', im)
+                print(f'PRED: {yp} TRUE: {yt}')
     try:
         print(f'{name} accuracy: {np.mean(np.array(y_preds) == np.array(y_trues))}')
     except:

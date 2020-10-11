@@ -12,4 +12,4 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     volumes:
-      - "/c/Users/domin/Documents/GitHub/ocr-benchmark:/code:rw"
+      - "~/GitHub/ocr-benchmark:/code:rw"
