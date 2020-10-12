@@ -19,7 +19,7 @@ dependencies:
   - pandas
   - pytorch-cpu
   - torchvision-cpu
-  # - fastai
+  - fastai
   # pip
   - pip
   - pip:
