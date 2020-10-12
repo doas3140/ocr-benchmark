@@ -17,8 +17,8 @@ dependencies:
   - pyvips
   # optional
   - pandas
-  - pytorch-cpu
-  - torchvision-cpu
+  - pytorch=1.6.0
+  # - torchvision
   - fastai
   # pip
   - pip
@@ -30,3 +30,4 @@ dependencies:
     - pytesseract
     - imageio
     - tabulate
+    - gdown
