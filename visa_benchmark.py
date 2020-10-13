@@ -23,7 +23,7 @@ from tabulate import tabulate
 import matplotlib.pyplot as plt
 from fastai.vision.all import *
 
-DEVICE = 'cpu'
+DEVICE = 'cuda'
 label_func = lambda x:x
 learn = load_learner('./models/model')
 learn.model.eval()
@@ -52,17 +52,25 @@ def nn_treshold_images(crops, bs=8, thresh=0.999, device=DEVICE):
         mask[ys > 1-thresh] = 255
         mask = list(map(lambda y: y[0], mask))
         ims_out.extend(mask)
-    ims_out = [remove_small_blobs(im) for im in ims_out]
+    ims_out = [imutils.resize(im, width=500) for im in ims_out]
+    ims_out = [vert2hori(remove_small_blobs_vert(im)) for im in ims_out]
+    ims_out = [imutils.resize(im, width=500) for im in ims_out]
     crops_out = []
     for thresh, (name,crop,nr) in zip(ims_out,crops):
         crops_out.append((name,thresh,nr))
     return crops_out
 
-def remove_small_blobs(thresh):
-  cnts = find_all_contours(255-thresh)
-  cnts = list(filter(lambda c: contour_area(c) < 50, cnts))
-  thresh = cv2.drawContours(thresh, cnts, -1, 255, -1)
-  return thresh
+def remove_small_blobs_vert(thresh): # only works for vertical text
+    cnts = find_all_contours(255-thresh)
+    bboxes = list(map(cv2.boundingRect, cnts))
+    x_mean = np.median(list(map(lambda x: x[0], bboxes)))
+    def filter_func(cnt):
+        a = contour_area(cnt)
+        x,y,w,h = cv2.boundingRect(cnt)
+        return a < 13000 or (h < 30) or (w < 10) # or abs(x - x_mean) > 20
+    cnts = list(filter(filter_func, cnts))
+    thresh = cv2.drawContours(thresh, cnts, -1, 255, -1)
+    return thresh
 
 class Timer:
     def __init__(self):
@@ -146,7 +154,11 @@ class TR_OCR(OCRBatch):
     def _preprocessing(self, bgr):
         gray = togray(bgr, rgb=(.2,.65,.15))
         gray = self.clahe.apply(gray)
-        return threshold(gray, 80, cv2.THRESH_BINARY)
+        thresh = threshold(gray, 90, cv2.THRESH_BINARY)
+        cnts = find_all_contours(255-thresh)
+        cnts = list(filter(lambda c: contour_area(c) < 1, cnts))
+        thresh = cv2.drawContours(thresh, cnts, -1, 255, -1)
+        return thresh
     def _postprocess(self, y_pred):
         y_pred = y_pred.strip()
         for x_str, y_str in [(' ', ''),('!','1'),('|','1'),('I','1')]:
@@ -233,10 +245,23 @@ ve_bb = [
 
 TIMER = Timer()
 
+def vert2hori(thresh, pad=20):
+    contours = find_all_contours(255-thresh)
+    # if len(contours) != 9:
+    #     plot_contours(thresh, contours, figsize=(10,10))
+    # assert len(contours) == 9
+    digits = []
+    H,W = thresh.shape[:2]
+    for x,y,w,h in sorted(map(cv2.boundingRect, contours), key=lambda b: b[1]):
+        t,l,b,r = max(0,y-pad), max(0,x-pad), min(H,y+h+pad), min(W,x+w+pad)
+        digits.append(thresh[t:b,l:r])
+    digits = [imutils.resize(im, height=60) for im in digits]
+    return np.concatenate(digits, axis=1)
+
 class ImageDataset(Dataset):
     def __init__(self, dir_path):
         super().__init__()
-        self.image_paths = list(sorted(Path(dir_path).iterdir()))[:20]
+        self.image_paths = list(sorted(Path(dir_path).iterdir()))[:800]
         self.start_nr = 2851000
         self.diffs = [0, int(1e4), int(2e4)]
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
@@ -252,7 +277,10 @@ class ImageDataset(Dataset):
             for bb, nr in zip(bbs, nrs):
                 crop = image[bb[1]:bb[1]+bb[3],bb[0]:bb[0]+bb[2]]
                 if name == 've':
-                    crop = imutils.resize(crop, height=500)
+                    pass
+                    # crop = vert2hori(crop)
+                    # crop = imutils.resize(crop, width=500)
+                    # crop = imutils.resize(crop, height=500)
                 else:
                     crop = imutils.resize(crop, width=500)
                 cv2.normalize(crop, crop, 0, 255, cv2.NORM_MINMAX)
@@ -260,7 +288,7 @@ class ImageDataset(Dataset):
         assert len(crops) == 12
         return crops
 
-bl_ocr, br_ocr, tr_ocr, ve_ocr = BL_OCR(), BR_OCR(), TR_OCR(lstm=True), VE_OCR(vert=True)
+bl_ocr, br_ocr, tr_ocr, ve_ocr = BL_OCR(), BR_OCR(), TR_OCR(lstm=True, lang='eng_best'), VE_OCR()
 
 dataset = ImageDataset('./visa/')
 dl = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=os.cpu_count(), collate_fn=lambda x:x[0], drop_last=False)
@@ -272,7 +300,6 @@ print('READING IMAGES...')
 with TIMER.time(f'imread'):
     for crops in tqdm(dl):
         i += 1
-        # if i >100: break
         all_crops.extend(crops)
 
 def pytorch_delistify(x): # BUG
@@ -289,8 +316,8 @@ br_crops = list(filter(lambda x: x[0] == 'br', all_crops))
 tr_crops = list(filter(lambda x: x[0] == 'tr', all_crops))
 ve_crops = list(filter(lambda x: x[0] == 've', all_crops))
 
-with TIMER.time(f'nn'):
-    ve_crops = nn_treshold_images(ve_crops)
+# with TIMER.time(f'nn'):
+#     ve_crops = nn_treshold_images(ve_crops)
 
 
 def batch_list(arr, num_batches):
@@ -307,10 +334,12 @@ def batch_list(arr, num_batches):
 def predict_in_batch(ocr, images, y_trues=[], name=''):
     y_preds = []
     for image_batch in tqdm(batch_list(images, 3*40)):
-        big_image = np.concatenate(image_batch, axis=1 if name == 've' else 0)
+        # big_image = np.concatenate(image_batch, axis=1 if name == 've' else 0)
+        big_image = np.concatenate(image_batch, axis=0)
         with TIMER.time(f'pred-{name}'):
             y_pred = ocr.predict(big_image)
-            y_preds.extend(list(reversed(y_pred)) if name == 've' else y_pred)
+            # y_preds.extend(list(reversed(y_pred)) if name == 've' else y_pred)
+            y_preds.extend(y_pred)
     return y_preds
 
 def predict_in_solo(ocr, images, y_trues=[], name=''):
@@ -328,10 +357,11 @@ save_crop_dir = './crops'
 SAVE_CROPS = True
 
 for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
-    if name not in ['ve']: continue
+    if name not in ['tr']: continue
     images = list(map(lambda x: x[1], crops))
     y_trues = list(map(lambda x: x[2], crops))
-    y_preds = predict_in_solo(ocr, images, y_trues, name)
+    pred_func = predict_in_solo if name in ['ve'] else predict_in_batch
+    y_preds = pred_func(ocr, images, y_trues, name)
     if PRINT_BAD:
         # bads = [x for x in zip(images, y_preds, y_trues) if x[1] != x[2]]
         # fig = plt.figure()
