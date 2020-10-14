@@ -12,6 +12,6 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     volumes:
-      - "~/GitHub/ocr-benchmark2:/code:rw"
+      - "~/GitHub/ocr-benchmark:/code:rw"
     # IF USE GPU UNCOMMENCT BELOW
     runtime: nvidia
