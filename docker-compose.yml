@@ -3,8 +3,8 @@ services:
   web:
     build:
       context: .
-      shm_size: '2gb' # <-- this will set the size when BUILDING
-    shm_size: '2gb' # <-- when RUNNING 
+      shm_size: '8gb' # <-- this will set the size when BUILDING
+    shm_size: '8gb' # <-- when RUNNING 
     security_opt:
       - seccomp:unconfined
     ports:
@@ -12,6 +12,6 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     volumes:
-      - "~/GitHub/ocr-benchmark:/code:rw"
+      - "~/GitHub/ocr-benchmark2:/code:rw"
     # IF USE GPU UNCOMMENCT BELOW
     runtime: nvidia
