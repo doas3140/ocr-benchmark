@@ -23,8 +23,8 @@ class TR_OCR(OCRBatch):
         y_pred = y_pred.strip()
         for x_str, y_str in [(' ', ''),('!','1'),('|','1'),('I','1')]:
             y_pred = y_pred.replace(x_str, y_str)
-        if self.lstm and len(y_pred) == 10:
-            y_pred = filter53(y_pred)
+        # if self.lstm and len(y_pred) == 10:
+        #     y_pred = filter53(y_pred)
         return y_pred
 
 def filter53(y_pred):

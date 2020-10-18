@@ -1,10 +1,13 @@
 version: '3.5'
 services:
   web:
+    environment:
+      - PYTHONUNBUFFERED=1
     build:
       context: .
       shm_size: '8gb' # <-- this will set the size when BUILDING
     shm_size: '8gb' # <-- when RUNNING 
+    command: conda run -n ml-server python visa_benchmark.py
     security_opt:
       - seccomp:unconfined
     ports:

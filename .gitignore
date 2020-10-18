@@ -2,7 +2,8 @@ ocr/
 data/0.png
 visa/
 bads/
-models/model
+models/
+big_images/
 
 # Other
 ___*

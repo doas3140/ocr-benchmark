@@ -40,10 +40,10 @@ RUN apt-get install -y libleptonica-dev && \
     ldconfig && \
     make training && \
     make training-install
-# ### PYTHON ENVIRONMENT
+### PYTHON ENVIRONMENT
 WORKDIR /code
 COPY . .
-RUN cp models/* /usr/local/share/tessdata/
+# COPY ["conda_environment.yml", "visa_benchmark.py"] .
 # libgl1-mesa-glx fixes opencv error: https://github.com/ContinuumIO/docker-images/issues/49
 RUN apt-get install libgl1-mesa-glx unzip -y && \
     conda env create -f conda_environment.yml && \
@@ -52,9 +52,18 @@ RUN apt-get install libgl1-mesa-glx unzip -y && \
     exec bash && \
     conda activate ml-server
 
+### MODELS
+WORKDIR /code/models
+RUN pip install gdown && \
+    gdown --id 1N8t6N0Qu_CJvF16kDb4f3TjLw7kuJqsx && \
+    gdown --id 1HF5jJirBpX1jDeT_BQF75Op4p_RF88n- && \
+    cp ./* /usr/local/share/tessdata/
+
+### EXPOSE
+WORKDIR /code
 EXPOSE 5000
 
-# # ENTRYPOINT ["conda", "run", "-n", "ml-server", "python", "benchmark.py"]
+# ENTRYPOINT ["conda", "run", "-n", "ml-server", "python", "visa_benchmark.py"]
 
 # # ENTRYPOINT [ \
 # #     "conda", "run", "-n", "ml-server", "python", "benchmark.py", \

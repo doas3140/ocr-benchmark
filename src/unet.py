@@ -2,25 +2,29 @@
 from .utils.img_utils import morph, togray, threshold, contour_area, find_all_contours
 from .utils.other import batch_list
 from fastai.vision.all import *
+import torch.nn.functional as F
 import imutils
 import cv2
 import numpy as np
 from tqdm import tqdm
 
 DEVICE = 'cuda'
-learn = load_learner('./models/model')
+nn_img_size = (128*4,64)
+out_img_size = (128*4,64)
+learn = load_learner(f'./models/model_{nn_img_size[0]}x{nn_img_size[1]}')
 learn.model.eval()
 learn.model.to(DEVICE)
 
-def treshold_vertical_crops(crops, bs=8, thresh=0.999, device=DEVICE):
+def treshold_vertical_crops(crops, bs=8, thresh=0.8, device=DEVICE):
     # returns horizontal tresholded crops
     ims_out = []
     for ims in tqdm(batch_list(crops, bs)):
         ims = list(map(lambda i: i[1], ims))
-        ims = tensor([cv2.resize(im, (64,128*4)) for im in ims]).to(device)
+        ims = tensor([cv2.resize(im, nn_img_size[::-1]) for im in ims]).to(device)
         ims = ims[ :, :, :, [2,1,0] ] # BGR -> RGB
         ims = tensor(ims).permute(0,3,1,2).float() / 255.
-        ys = learn.model(ims).cpu().detach().numpy()
+        ys = learn.model(ims)
+        ys = F.interpolate(ys, size=out_img_size, mode='bilinear', align_corners=False).cpu().detach().numpy()
         mask = np.zeros_like(ys, dtype=np.uint8)
         mask[ys > 1-thresh] = 255
         mask = list(map(lambda y: y[0], mask))
@@ -28,9 +32,7 @@ def treshold_vertical_crops(crops, bs=8, thresh=0.999, device=DEVICE):
     ims_out = [imutils.resize(im, width=500) for im in ims_out]
     ims_out = [vert2hori(remove_small_blobs_vert(im)) for im in ims_out]
     ims_out = [imutils.resize(im, width=500) for im in ims_out]
-    crops_out = []
-    for thresh, (name,crop,nr) in zip(ims_out,crops):
-        crops_out.append((name,thresh,nr))
+    crops_out = [(name,thresh,nr,p) for thresh, (name,crop,nr,p) in zip(ims_out,crops)]
     return crops_out
 
 def remove_small_blobs_vert(thresh): # only works for vertical text
@@ -40,7 +42,7 @@ def remove_small_blobs_vert(thresh): # only works for vertical text
     def filter_func(cnt):
         a = contour_area(cnt)
         x,y,w,h = cv2.boundingRect(cnt)
-        return a < 13000 or (h < 30) or (w < 10) # or abs(x - x_mean) > 20
+        return a < 12000 or (h < 30) or (w < 10) # or abs(x - x_mean) > 20
     cnts = list(filter(filter_func, cnts))
     thresh = cv2.drawContours(thresh, cnts, -1, 255, -1)
     return thresh

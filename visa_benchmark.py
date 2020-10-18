@@ -23,6 +23,7 @@ from src.utils.other import batch_list, Timer
 from src.ocr import BL_OCR, BR_OCR, TR_OCR, VE_OCR
 label_func = lambda x:x # load_model BUG
 from src.unet import treshold_vertical_crops
+from copy import deepcopy
 
 x,w,h = 240,400,120
 bl_bb = [
@@ -57,10 +58,9 @@ TIMER = Timer()
 class ImageDataset(Dataset):
     def __init__(self, dir_path, slice=None):
         super().__init__()
-        if slice is None:
-            self.image_paths = list(sorted(Path(dir_path).iterdir()))
-        else:
-            self.image_paths = list(sorted(Path(dir_path).iterdir()))[slice]
+        self.image_paths = list(sorted(Path(dir_path).iterdir()))
+        if slice is not None:
+            self.image_paths = self.image_paths[slice]
         self.start_nr = 2851000
         self.diffs = [0, int(1e4), int(2e4)]
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
@@ -78,9 +78,9 @@ class ImageDataset(Dataset):
                 if name == 've':
                     pass
                 else:
-                    crop = imutils.resize(crop, width=500)
+                    crop = imutils.resize(crop, width=800)
                 cv2.normalize(crop, crop, 0, 255, cv2.NORM_MINMAX)
-                crops.append([name, crop, nr])
+                crops.append([name, crop, nr, str(p)])
         assert len(crops) == 12
         return crops
 
@@ -91,21 +91,20 @@ dataset = ImageDataset('./visa/')
 num_examples = 500
 print('READING IMAGES...')
 for i in tqdm(range(0, len(dataset), num_examples)):
+    # if i > 0: break
     dataset = ImageDataset('./visa/', slice=slice(i,i+num_examples))
     dl = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=os.cpu_count(), collate_fn=lambda x:x[0], drop_last=False)
 
     t_start = time.time()
-    i = 0
     with TIMER.time(f'imread'):
         for crops in tqdm(dl):
-            i += 1
-            all_crops.extend(crops)
+            all_crops.extend(deepcopy(crops)) # deepcopy cuz of pytorch BUG: https://github.com/pytorch/pytorch/issues/973#issuecomment-459398189
 
 def pytorch_delistify(x): # BUG
-    name,crop,nr = x
+    name,crop,nr,p = x
     if type(name) is tuple:
-        name, crop, nr = name[0], np.array(crop)[0], nr[0]
-    return (name,crop,nr)
+        name, crop, nr, p = name[0], np.array(crop)[0], nr[0], p[0]
+    return (name,crop,nr,p)
 all_crops = list(map(pytorch_delistify, all_crops))
     
 print('NUM CROPS:', len(all_crops))
@@ -155,12 +154,12 @@ def predict_in_solo(ocr, images, y_trues=[], name=''):
     return y_preds
 
 PRINT_BAD = True
-save_crop_dir = './crops'
-SAVE_CROPS = True
+SAVE_CROPS = False
 
 print('CHAR RECOGNITION...')
 for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
-    if name in []: continue
+    # if name not in ['ve']: continue
+    paths = list(map(lambda x: x[3], crops))
     images = list(map(lambda x: x[1], crops))
     y_trues = list(map(lambda x: x[2], crops))
     pred_func = predict_in_solo if name in ['ve'] else predict_in_batch
@@ -168,10 +167,10 @@ for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_o
     if PRINT_BAD:
         # bads = [x for x in zip(images, y_preds, y_trues) if x[1] != x[2]]
         # fig = plt.figure()
-        for i, (im,yp,yt) in enumerate(zip(images, y_preds, y_trues)):
+        for i, (im,yp,yt,p) in enumerate(zip(images, y_preds, y_trues, paths)):
             if yp != yt:
                 cv2.imwrite(f'bads/{yp}_{yt}_{name}.png', im)
-                print(f'PRED: {yp} TRUE: {yt}')
+                print(f'PRED: {yp} TRUE: {yt} in {p}')
     try:
         print(f'{name} accuracy: {np.mean(np.array(y_preds) == np.array(y_trues))}')
     except:
