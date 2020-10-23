@@ -1,9 +1,13 @@
 ocr/
-data/0.png
+data/
 visa/
 bads/
 models/
+!models/custom300_tr.traineddata
+!models/ocrb_int.traineddata
 big_images/
+# ray tune
+eval_func/
 
 # Other
 ___*

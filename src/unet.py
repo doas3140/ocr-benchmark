@@ -15,22 +15,33 @@ learn = load_learner(f'./models/model_{nn_img_size[0]}x{nn_img_size[1]}')
 learn.model.eval()
 learn.model.to(DEVICE)
 
+def pad_image(im, pad=20, pad_val=255):
+    h,w = im.shape[:2]
+    im_new = np.zeros([h+pad*2,w+pad*2], dtype=im.dtype) + pad_val
+    im_new[pad:pad+h,pad:pad+w] = im
+    return im_new
+
 def treshold_vertical_crops(crops, bs=8, thresh=0.8, device=DEVICE):
     # returns horizontal tresholded crops
     ims_out = []
-    for ims in tqdm(batch_list(crops, bs)):
-        ims = list(map(lambda i: i[1], ims))
-        ims = tensor([cv2.resize(im, nn_img_size[::-1]) for im in ims]).to(device)
+    for orig_crops in tqdm(batch_list(crops, bs)):
+        orig_ims = list(map(lambda i: i[1], orig_crops))
+        ims = tensor([cv2.resize(im, nn_img_size[::-1]) for im in orig_ims]).to(device)
         ims = ims[ :, :, :, [2,1,0] ] # BGR -> RGB
-        ims = tensor(ims).permute(0,3,1,2).float() / 255.
+        ims = tensor(ims).permute(0,3,1,2).float() / 255. # [b,3,h,w]
         ys = learn.model(ims)
         ys = F.interpolate(ys, size=out_img_size, mode='bilinear', align_corners=False).cpu().detach().numpy()
         mask = np.zeros_like(ys, dtype=np.uint8)
         mask[ys > 1-thresh] = 255
         mask = list(map(lambda y: y[0], mask))
+        for i,(c,m) in enumerate(zip(orig_crops,mask)):
+            im, nr = c[1], c[2]
+            cv2.imwrite(f'labels/{nr}.png', m)
+            cv2.imwrite(f'images/{nr}.png', im)
         ims_out.extend(mask)
     ims_out = [imutils.resize(im, width=500) for im in ims_out]
     ims_out = [vert2hori(remove_small_blobs_vert(im)) for im in ims_out]
+    ims_out = [pad_image(im) for im in ims_out]
     ims_out = [imutils.resize(im, width=500) for im in ims_out]
     crops_out = [(name,thresh,nr,p) for thresh, (name,crop,nr,p) in zip(ims_out,crops)]
     return crops_out

@@ -14,7 +14,6 @@ dependencies:
   - tqdm
   - opencv
   - tqdm
-  - pyvips
   # optional
   - pandas
   - pytorch=1.6.0
@@ -26,8 +25,10 @@ dependencies:
     - imutils
     - sklearn
     - tesserocr
-    - ray
     - pytesseract
     - imageio
     - tabulate
     - gdown
+    - ray
+    - ray[tune]
+    - ray[debug]

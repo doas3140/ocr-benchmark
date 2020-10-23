@@ -22,8 +22,15 @@ from src.utils.img_utils import morph, togray, threshold, contour_area, find_all
 from src.utils.other import batch_list, Timer
 from src.ocr import BL_OCR, BR_OCR, TR_OCR, VE_OCR
 label_func = lambda x:x # load_model BUG
-from src.unet import treshold_vertical_crops
+# from src.unet import treshold_vertical_crops
 from copy import deepcopy
+from fastcore.utils import parallel
+from functools import partial
+from multiprocessing import Pool
+import concurrent
+import queue
+
+NUM_THREADS = os.cpu_count()
 
 x,w,h = 240,400,120
 bl_bb = [
@@ -84,15 +91,16 @@ class ImageDataset(Dataset):
         assert len(crops) == 12
         return crops
 
-bl_ocr, br_ocr, tr_ocr, ve_ocr = BL_OCR(), BR_OCR(), TR_OCR(lstm=True, lang='custom300_tr'), VE_OCR()
+bl_ocr, br_ocr, tr_ocr, ve_ocr = lambda:BL_OCR(), lambda:BR_OCR(), lambda:TR_OCR(lstm=True, lang='custom300_tr'), lambda:VE_OCR()
 
 all_crops = []
-dataset = ImageDataset('./visa/')
+VISA_DIR = './data/visa/'
+dataset = ImageDataset(VISA_DIR)
 num_examples = 500
 print('READING IMAGES...')
 for i in tqdm(range(0, len(dataset), num_examples)):
     # if i > 0: break
-    dataset = ImageDataset('./visa/', slice=slice(i,i+num_examples))
+    dataset = ImageDataset(VISA_DIR, slice=slice(i,i+num_examples))
     dl = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=os.cpu_count(), collate_fn=lambda x:x[0], drop_last=False)
 
     t_start = time.time()
@@ -114,23 +122,12 @@ br_crops = list(filter(lambda x: x[0] == 'br', all_crops))
 tr_crops = list(filter(lambda x: x[0] == 'tr', all_crops))
 ve_crops = list(filter(lambda x: x[0] == 've', all_crops))
 
-print('TRESHOLDING WITH UNET...')
-with TIMER.time(f'nn'):
-    ve_crops = treshold_vertical_crops(ve_crops)
+# print('TRESHOLDING WITH UNET...')
+# with TIMER.time(f'nn'):
+#     ve_crops = treshold_vertical_crops(ve_crops)
 
-
-def batch_list(arr, num_batches):
-    out = []
-    b = []
-    for i in arr:
-        if len(b) == num_batches:
-            out.append(b)
-            b = []
-        b.append(i)
-    if len(b) > 0: out.append(b)
-    return out
-
-def predict_in_batch(ocr, images, y_trues=[], name=''):
+def predict_in_batch(create_ocr_func, images, y_trues=[], name=''):
+    ocr = create_ocr_func()
     y_preds = []
     for i, image_batch in enumerate(tqdm(batch_list(images, 3*40))):
         # big_image = np.concatenate(image_batch, axis=1 if name == 've' else 0)
@@ -143,7 +140,39 @@ def predict_in_batch(ocr, images, y_trues=[], name=''):
             y_preds.extend(y_pred)
     return y_preds
 
-def predict_in_solo(ocr, images, y_trues=[], name=''):
+def predict_in_batch_parallel(create_ocr_func, images, y_trues=[], name=''):
+    y_preds = []
+
+    ocr_queue = queue.Queue()
+    for _ in range(NUM_THREADS):
+        ocr_queue.put(create_ocr_func())
+
+    def ocr_predict(images, ocr=None):
+        im = np.concatenate(images, axis=0)
+        try:
+            ocr = ocr_queue.get(block=True, timeout=300)
+            return ocr.predict(im)
+        except ocr_queue.Empty:
+            return None
+        finally:
+            if ocr is not None:
+                ocr_queue.put(ocr)
+
+    with TIMER.time(f'pred-{name}'):
+        # with Pool(NUM_THREADS) as pool:
+        #     outs = pool.map(ocr_predict, images), total=len(images)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
+            batches = batch_list(images, 3*40)
+            for y_pred in list(tqdm(executor.map(ocr_predict, batches), total=len(batches))):
+                y_preds.extend(y_pred)
+            if SAVE_CROPS:
+                ocr = create_ocr_func()
+                for i,ims in enumerate(batches):
+                    cv2.imwrite(f'big_images/{i}.tiff', ocr._preprocessing(np.concatenate(ims, axis=0)))
+    return y_preds
+
+def predict_in_solo(create_ocr_func, images, y_trues=[], name=''):
+    ocr = create_ocr_func()
     y_preds = []
     for i,image in enumerate(tqdm(images)):
         with TIMER.time(f'pred-{name}'):
@@ -153,17 +182,51 @@ def predict_in_solo(ocr, images, y_trues=[], name=''):
                 cv2.imwrite(f'big_images/{y_pred[0]}_{y_trues[i]}.tiff', ocr._preprocessing(image))
     return y_preds
 
+def predict_in_solo_parallel(create_ocr_func, images, y_trues=[], name=''):
+    y_preds = []
+
+    ocr_queue = queue.Queue()
+    for _ in range(NUM_THREADS):
+        ocr_queue.put(create_ocr_func())
+
+    def ocr_predict(im, ocr=None):
+        try:
+            ocr = ocr_queue.get(block=True, timeout=300)
+            return ocr.predict(im)
+        except ocr_queue.Empty:
+            return None
+        finally:
+            if ocr is not None:
+                ocr_queue.put(ocr)
+
+    ocr = create_ocr_func()
+    with TIMER.time(f'pred-{name}'):
+        # with Pool(NUM_THREADS) as pool:
+        #     outs = pool.map(ocr_predict, images), total=len(images)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
+            for i,y_pred in enumerate(list(tqdm(executor.map(ocr_predict, images), total=len(images)))):
+                y_preds.extend(y_pred)
+                if SAVE_CROPS:
+                    cv2.imwrite(f'big_images/eng.ver.exp{i}.tiff', ocr._preprocessing(images[i]))
+                # if SAVE_CROPS and y_pred[0] != y_trues[i]:
+                #     cv2.imwrite(f'big_images/{y_pred[0]}_{y_trues[i]}.tiff', ocr._preprocessing(images[i]))
+    return y_preds
+
 PRINT_BAD = True
-SAVE_CROPS = False
+SAVE_CROPS = True
+PARALLEL = True
 
 print('CHAR RECOGNITION...')
 for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
-    # if name not in ['ve']: continue
+    if name in ['ve']: continue
     paths = list(map(lambda x: x[3], crops))
     images = list(map(lambda x: x[1], crops))
     y_trues = list(map(lambda x: x[2], crops))
     pred_func = predict_in_solo if name in ['ve'] else predict_in_batch
-    y_preds = pred_func(ocr, images, y_trues, name)
+    if PARALLEL and name not in ['tr']:
+        pred_func = predict_in_solo_parallel if name in ['ve'] else predict_in_batch_parallel
+    with TIMER.time(f'pred-{name}'):
+        y_preds = pred_func(ocr, images, y_trues, name)
     if PRINT_BAD:
         # bads = [x for x in zip(images, y_preds, y_trues) if x[1] != x[2]]
         # fig = plt.figure()
