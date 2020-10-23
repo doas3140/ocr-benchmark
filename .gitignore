@@ -8,6 +8,7 @@ models/
 big_images/
 # ray tune
 eval_func/
+hyperparameter_results.csv
 
 # Other
 ___*
