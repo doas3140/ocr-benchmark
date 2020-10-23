@@ -17,4 +17,4 @@ services:
     volumes:
       - "~/GitHub/ocr-benchmark:/code:rw"
     # IF USE GPU UNCOMMENCT BELOW
-    runtime: nvidia
+    # runtime: nvidia
