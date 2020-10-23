@@ -22,7 +22,7 @@ from src.utils.img_utils import morph, togray, threshold, contour_area, find_all
 from src.utils.other import batch_list, Timer
 from src.ocr import BL_OCR, BR_OCR, TR_OCR, VE_OCR
 label_func = lambda x:x # load_model BUG
-# from src.unet import treshold_vertical_crops
+from src.unet import treshold_vertical_crops
 from copy import deepcopy
 from fastcore.utils import parallel
 from functools import partial
@@ -122,9 +122,9 @@ br_crops = list(filter(lambda x: x[0] == 'br', all_crops))
 tr_crops = list(filter(lambda x: x[0] == 'tr', all_crops))
 ve_crops = list(filter(lambda x: x[0] == 've', all_crops))
 
-# print('TRESHOLDING WITH UNET...')
-# with TIMER.time(f'nn'):
-#     ve_crops = treshold_vertical_crops(ve_crops)
+print('TRESHOLDING WITH UNET...')
+with TIMER.time(f'nn'):
+    ve_crops = treshold_vertical_crops(ve_crops)
 
 def predict_in_batch(create_ocr_func, images, y_trues=[], name=''):
     ocr = create_ocr_func()
@@ -213,16 +213,16 @@ def predict_in_solo_parallel(create_ocr_func, images, y_trues=[], name=''):
     return y_preds
 
 PRINT_BAD = True
-SAVE_CROPS = True
+SAVE_CROPS = False
 PARALLEL = True
 
 print('CHAR RECOGNITION...')
 for name, ocr, crops in zip(['bl','br','tr','ve'], [bl_ocr, br_ocr, tr_ocr, ve_ocr], [bl_crops, br_crops, tr_crops, ve_crops]):
-    if name in ['ve']: continue
+    # if name in ['ve']: continue
     paths = list(map(lambda x: x[3], crops))
     images = list(map(lambda x: x[1], crops))
     y_trues = list(map(lambda x: x[2], crops))
-    pred_func = predict_in_solo if name in ['ve'] else predict_in_batch
+    pred_func = predict_in_batch if name in ['ve'] else predict_in_batch
     if PARALLEL and name not in ['tr']:
         pred_func = predict_in_solo_parallel if name in ['ve'] else predict_in_batch_parallel
     with TIMER.time(f'pred-{name}'):

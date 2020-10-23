@@ -1,6 +1,8 @@
-from .utils.img_utils import morph, togray, threshold, contour_area, find_all_contours
+from .utils.img_utils import morph, togray, threshold, contour_area, find_all_contours, clahe, bgr2cmyk
 from .utils.ocr import OCRBatch
 import cv2
+import imutils
+import numpy as np
 
 
 class BR_OCR(OCRBatch):
@@ -37,14 +39,14 @@ def filter53(y_pred):
     return y_pred
 
 class VE_OCR(OCRBatch):
-    def _preprocessing(self, thresh): # (treshold w/ unet)
-        # gray = togray(bgr, (0,1,0))
+    def _preprocessing(self, bgr):
+        return bgr # (when image is alrdy tresholded w/ unet)
+        # cmyk = bgr2cmyk(bgr)
+        # gray = 255-cmyk[:,:,1]
+        # gray = clahe(gray)
         # gray = cv2.medianBlur(gray, 5)
-        # thresh = threshold(gray, 100, cv2.THRESH_BINARY)
-        # cnts = find_all_contours(255-thresh)
-        # cnts = list(filter(lambda c: contour_area(c) < 50, cnts))
-        # thresh = cv2.drawContours(thresh, cnts, -1, 255, -1)
-        return thresh
+        # thresh = threshold(gray, 110, cv2.THRESH_BINARY)
+        # return thresh
     def _postprocess(self, y_pred):
         y_pred = y_pred.strip()
         for s in [' ','\n',"'",'"','.','‘','-','«','(',')','’']:

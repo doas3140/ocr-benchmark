@@ -8,7 +8,8 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-DEVICE = 'cuda'
+DEVICE = 'cuda' if torch.cuda.torch.cuda.is_available() else 'cpu'
+print(f'USING {DEVICE} FOR UNET')
 nn_img_size = (128*4,64)
 out_img_size = (128*4,64)
 learn = load_learner(f'./models/model_{nn_img_size[0]}x{nn_img_size[1]}')
