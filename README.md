@@ -2,6 +2,10 @@
 
 ## Setup
 
+0. prepare docker-compose.yml file
+- if use gpu uncomment `runtime: nvidia`
+- make sure volume is set to this dir, ex: `~/ocr-benchmark:/code:rw`
+
 1. run container
 ```
 tmux
@@ -13,6 +17,11 @@ docker-compose up
 ```
 docker-compose exec web bash
 conda activate ml-server
+```
+
+3. download unet model
+```
+gdown -O models/ --id 1Yyzos8epMesi9tcdbbckKQ9cPE802EU7
 ```
 
 ## Examples
